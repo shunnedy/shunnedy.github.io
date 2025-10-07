@@ -1,96 +1,186 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ESP32 BLE Text Sender</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      background: #f9fafb;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
-    }
-    h1 { color: #333; margin-bottom: 20px; }
-    input {
-      font-size: 1.2rem;
-      padding: 10px;
-      width: 250px;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      margin-bottom: 10px;
-      outline: none;
-    }
-    button {
-      font-size: 1.1rem;
-      padding: 10px 20px;
-      margin: 5px;
-      border: none;
-      border-radius: 8px;
-      background-color: #4caf50;
-      color: white;
-      cursor: pointer;
-    }
-    button:disabled {
-      background-color: #999;
-      cursor: not-allowed;
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESP32 ブロックプログラミング（プロトタイプ）</title>
+<style>
+  body {
+    margin: 0;
+    font-family: "Hiragino Maru Gothic ProN", "Rounded Mplus 1c", sans-serif;
+    background-color: #f0f8ff;
+    overflow: hidden;
+    touch-action: none;
+  }
+  #connect-screen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    height: 100vh;
+    background: linear-gradient(to bottom right, #b3e5fc, #e1f5fe);
+  }
+  #connect-button {
+    font-size: 1.5rem;
+    padding: 15px 30px;
+    border: none;
+    border-radius: 12px;
+    background-color: #4fc3f7;
+    color: white;
+    cursor: pointer;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  }
+  #connect-button:active {
+    background-color: #039be5;
+  }
+
+  /* メイン画面 */
+  #main-screen {
+    display: none;
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+  }
+
+  #program-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 50%;
+    height: 100%;
+    background-color: white;
+    border-right: 3px solid #90caf9;
+  }
+
+  #sprite-area {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 50%;
+    height: 50%;
+    background-color: #aee7ff; /* 初期みずいろ */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+  }
+
+  #character-area {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 50%;
+    height: 50%;
+    background-color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+  }
+
+  #character {
+    width: 150px;
+    height: auto;
+    user-select: none;
+    touch-action: none;
+    cursor: grab;
+  }
+
+  #draw-button {
+    font-size: 1.2rem;
+    padding: 8px 20px;
+    border: none;
+    border-radius: 10px;
+    background-color: #ffcc80;
+    margin-top: 10px;
+  }
+</style>
 </head>
 <body>
-  <h1>ESP32 BLE テキスト送信</h1>
-  <button id="connect">🔗 ESP32と接続</button>
-  <input id="textInput" type="text" placeholder="表示したい文字を入力">
-  <button id="send" disabled>📤 送信</button>
 
-  <script>
-    let bleDevice = null;
-    let bleServer = null;
-    let service = null;
-    let writeCharacteristic = null;
+<!-- 接続画面 -->
+<div id="connect-screen">
+  <h1>ESP32とつなげよう！</h1>
+  <button id="connect-button">つなぐ</button>
+</div>
 
-    // あなたのESP32が使っているUUID
-    const SERVICE_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb";
-    const CHARACTERISTIC_UUID = "0000ffe1-0000-1000-8000-00805f9b34fb";
+<!-- メイン画面 -->
+<div id="main-screen">
+  <div id="program-area"></div>
+  <div id="sprite-area">はいけい（いろをタップしてかえよう）</div>
+  <div id="character-area">
+    <img id="character" src="character.png" alt="キャラクター">
+    <button id="draw-button">えをかく</button>
+  </div>
+</div>
 
-    document.getElementById("connect").addEventListener("click", async () => {
-      try {
-        console.log("BLEデバイスを検索中...");
-        bleDevice = await navigator.bluetooth.requestDevice({
-          filters: [{ namePrefix: "ESP32" }], // "ESP32_BLE"でも可
-          optionalServices: [SERVICE_UUID],
-        });
+<script>
+let bleDevice, bleServer, service, writeCharacteristic;
+const SERVICE_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb";
+const CHARACTERISTIC_UUID = "0000ffe1-0000-1000-8000-00805f9b34fb";
 
-        bleServer = await bleDevice.gatt.connect();
-        service = await bleServer.getPrimaryService(SERVICE_UUID);
-        writeCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+const connectButton = document.getElementById("connect-button");
+const connectScreen = document.getElementById("connect-screen");
+const mainScreen = document.getElementById("main-screen");
 
-        document.getElementById("send").disabled = false;
-        alert("✅ 接続完了: " + bleDevice.name);
-      } catch (error) {
-        console.error(error);
-        alert("接続失敗: " + error);
-      }
+connectButton.addEventListener("click", async () => {
+  try {
+    bleDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: "ESP32" }],
+      optionalServices: [SERVICE_UUID],
     });
+    bleServer = await bleDevice.gatt.connect();
+    service = await bleServer.getPrimaryService(SERVICE_UUID);
+    writeCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
 
-    document.getElementById("send").addEventListener("click", async () => {
-      const text = document.getElementById("textInput").value;
-      if (!text || !writeCharacteristic) return;
+    // 接続完了 → メイン画面に切り替え
+    connectScreen.style.display = "none";
+    mainScreen.style.display = "block";
+    alert("ESP32につながったよ！");
+  } catch (e) {
+    alert("つながらなかったよ…もういちどためしてね。");
+    console.error(e);
+  }
+});
 
-      try {
-        const encoder = new TextEncoder();
-        const data = encoder.encode(text);
-        await writeCharacteristic.writeValue(data);
-        alert("📤 送信完了: " + text);
-      } catch (error) {
-        console.error(error);
-        alert("送信エラー: " + error);
-      }
-    });
-  </script>
+// 🩵 スプライトの色変更
+const spriteArea = document.getElementById("sprite-area");
+spriteArea.addEventListener("click", () => {
+  const colors = ["#aee7ff", "#ffe0b2", "#c8e6c9", "#f8bbd0", "#d1c4e9"];
+  const current = spriteArea.style.backgroundColor;
+  let next = colors[Math.floor(Math.random() * colors.length)];
+  while (next === current) next = colors[Math.floor(Math.random() * colors.length)];
+  spriteArea.style.backgroundColor = next;
+});
+
+// 🧍キャラクターをドラッグ移動（右半分で自由に動かせる）
+const character = document.getElementById("character");
+let dragging = false;
+let offsetX, offsetY;
+
+character.addEventListener("touchstart", (e) => {
+  dragging = true;
+  const rect = character.getBoundingClientRect();
+  offsetX = e.touches[0].clientX - rect.left;
+  offsetY = e.touches[0].clientY - rect.top;
+});
+
+character.addEventListener("touchmove", (e) => {
+  if (!dragging) return;
+  const x = e.touches[0].clientX - offsetX;
+  const y = e.touches[0].clientY - offsetY;
+  character.style.position = "absolute";
+  character.style.left = x + "px";
+  character.style.top = y + "px";
+});
+
+character.addEventListener("touchend", () => dragging = false);
+
+// 「えをかく」ボタンは今は未実装（今後キャンバスモードに切り替え）
+document.getElementById("draw-button").addEventListener("click", () => {
+  alert("🎨 じぶんのキャラクターをかけるようにするよ（じゅんびちゅう）");
+});
+</script>
+
 </body>
 </html>
