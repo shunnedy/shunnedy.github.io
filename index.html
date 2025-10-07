@@ -65,6 +65,7 @@
     display: flex;
     justify-content: center;
     align-items: center;
+    flex-direction: column;
   }
 
   #character {
@@ -73,6 +74,58 @@
     user-select: none;
     touch-action: none;
     cursor: grab;
+  }
+
+  #paintButton {
+    margin-top: 10px;
+    font-size: 1.2rem;
+    background-color: #ffb300;
+    color: white;
+    border: none;
+    border-radius: 1rem;
+    padding: 0.5rem 1rem;
+  }
+
+  /* おえかきモード */
+  #paintArea {
+    display: none;
+    position: absolute;
+    top: 10%;
+    left: 10%;
+    width: 80%;
+    height: 80%;
+    background-color: white;
+    border: 3px solid #00bcd4;
+    z-index: 10;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #paintCanvas {
+    background-color: #f5f5f5;
+    border: 2px solid #ccc;
+    touch-action: none;
+  }
+
+  #saveDrawing {
+    margin-top: 10px;
+    background-color: #00bcd4;
+    color: white;
+    font-size: 1.2rem;
+    border: none;
+    border-radius: 1rem;
+    padding: 0.5rem 1rem;
+  }
+
+  #closePaint {
+    margin-top: 10px;
+    background-color: #aaa;
+    color: white;
+    font-size: 1.2rem;
+    border: none;
+    border-radius: 1rem;
+    padding: 0.5rem 1rem;
   }
 </style>
 </head>
@@ -86,15 +139,21 @@
     <div id="programArea"></div>
     <div id="spriteArea"></div>
     <div id="characterArea">
-      <!-- テンプレートキャラ（消えない） -->
       <img id="character" src="character.png" draggable="false">
+      <button id="paintButton">おえかきモード</button>
+    </div>
+
+    <div id="paintArea">
+      <canvas id="paintCanvas" width="300" height="300"></canvas>
+      <button id="saveDrawing">このえをつかう</button>
+      <button id="closePaint">とじる</button>
     </div>
   </div>
 
 <script>
 let device, characteristic;
 
-// --- BLE接続 ---
+// --- ESP32接続処理（安定版） ---
 async function connectToESP32() {
   try {
     device = await navigator.bluetooth.requestDevice({
@@ -112,10 +171,9 @@ async function connectToESP32() {
     console.error(error);
   }
 }
-
 document.getElementById("connectButton").addEventListener("click", connectToESP32);
 
-// --- キャラクター配置機能 ---
+// --- キャラクター配置 ---
 const templateChar = document.getElementById("character");
 const spriteArea = document.getElementById("spriteArea");
 const programArea = document.getElementById("programArea");
@@ -126,7 +184,6 @@ let isDragging = false;
 
 function startDrag(e) {
   e.preventDefault();
-  // テンプレートをコピーして持ち上げる
   dragged = templateChar.cloneNode(true);
   dragged.removeAttribute("id");
   dragged.style.position = "absolute";
@@ -154,7 +211,6 @@ function endDrag(e) {
   const programRect = programArea.getBoundingClientRect();
   const charRect = characterArea.getBoundingClientRect();
 
-  // スプライトまたはプログラムエリア内なら配置
   if (
     (x > spriteRect.left && x < spriteRect.right &&
      y > spriteRect.top && y < spriteRect.bottom) ||
@@ -163,14 +219,7 @@ function endDrag(e) {
   ) {
     dragged.style.pointerEvents = "auto";
     dragged.style.opacity = "1.0";
-  } else if (
-    x > charRect.left && x < charRect.right &&
-    y > charRect.top && y < charRect.bottom
-  ) {
-    // 元のエリアに戻したら削除
-    dragged.remove();
   } else {
-    // その他の場所も削除（安全策）
     dragged.remove();
   }
 
@@ -178,10 +227,50 @@ function endDrag(e) {
   isDragging = false;
 }
 
-// 右下のテンプレキャラは「触るとコピーして持ち上げる」
 templateChar.addEventListener("pointerdown", startDrag);
 document.addEventListener("pointermove", moveDrag);
 document.addEventListener("pointerup", endDrag);
+
+// --- おえかきモード ---
+const paintButton = document.getElementById("paintButton");
+const paintArea = document.getElementById("paintArea");
+const paintCanvas = document.getElementById("paintCanvas");
+const ctx = paintCanvas.getContext("2d");
+let drawing = false;
+
+paintButton.addEventListener("click", () => {
+  paintArea.style.display = "flex";
+  ctx.clearRect(0, 0, paintCanvas.width, paintCanvas.height);
+});
+
+paintCanvas.addEventListener("pointerdown", (e) => {
+  drawing = true;
+  ctx.beginPath();
+  ctx.moveTo(e.offsetX, e.offsetY);
+});
+paintCanvas.addEventListener("pointermove", (e) => {
+  if (drawing) {
+    ctx.lineTo(e.offsetX, e.offsetY);
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    ctx.stroke();
+  }
+});
+paintCanvas.addEventListener("pointerup", () => drawing = false);
+paintCanvas.addEventListener("pointerleave", () => drawing = false);
+
+// 絵をキャラに反映
+document.getElementById("saveDrawing").addEventListener("click", () => {
+  const imgData = paintCanvas.toDataURL("image/png");
+  templateChar.src = imgData;
+  paintArea.style.display = "none";
+});
+
+// 閉じる
+document.getElementById("closePaint").addEventListener("click", () => {
+  paintArea.style.display = "none";
+});
 </script>
 </body>
 </html>
