@@ -35,7 +35,6 @@
     position: relative;
   }
 
-  /* 左：プログラムエリア */
   #programArea {
     position: absolute;
     left: 0;
@@ -46,7 +45,6 @@
     border-right: 3px solid #ccc;
   }
 
-  /* 右上：スプライトエリア */
   #spriteArea {
     position: absolute;
     right: 0;
@@ -57,7 +55,6 @@
     border-bottom: 3px solid #ccc;
   }
 
-  /* 右下：キャラクター置き場 */
   #characterArea {
     position: absolute;
     right: 0;
@@ -73,9 +70,9 @@
   #character {
     width: 100px;
     height: 100px;
-    cursor: grab;
     user-select: none;
     touch-action: none;
+    cursor: grab;
   }
 </style>
 </head>
@@ -89,6 +86,7 @@
     <div id="programArea"></div>
     <div id="spriteArea"></div>
     <div id="characterArea">
+      <!-- テンプレートキャラ（消えない） -->
       <img id="character" src="character.png" draggable="false">
     </div>
   </div>
@@ -96,7 +94,7 @@
 <script>
 let device, characteristic;
 
-// BLE接続
+// --- BLE接続 ---
 async function connectToESP32() {
   try {
     device = await navigator.bluetooth.requestDevice({
@@ -106,6 +104,7 @@ async function connectToESP32() {
     const server = await device.gatt.connect();
     const service = await server.getPrimaryService(0xFFE0);
     characteristic = await service.getCharacteristic(0xFFE1);
+
     document.getElementById("connectSection").style.display = "none";
     document.getElementById("mainUI").style.display = "block";
   } catch (error) {
@@ -116,43 +115,46 @@ async function connectToESP32() {
 
 document.getElementById("connectButton").addEventListener("click", connectToESP32);
 
-// --- ドラッグ＆ドロップ ---
-const character = document.getElementById("character");
+// --- キャラクター配置機能 ---
+const templateChar = document.getElementById("character");
 const spriteArea = document.getElementById("spriteArea");
 const programArea = document.getElementById("programArea");
 const characterArea = document.getElementById("characterArea");
 
-let isDragging = false;
-let offsetX = 0, offsetY = 0;
 let dragged = null;
+let isDragging = false;
 
-character.addEventListener("pointerdown", (e) => {
-  isDragging = true;
-  dragged = e.target.cloneNode(true); // コピーを作る
-  document.body.appendChild(dragged);
+function startDrag(e) {
+  e.preventDefault();
+  // テンプレートをコピーして持ち上げる
+  dragged = templateChar.cloneNode(true);
+  dragged.removeAttribute("id");
   dragged.style.position = "absolute";
   dragged.style.left = e.pageX - 50 + "px";
   dragged.style.top = e.pageY - 50 + "px";
   dragged.style.pointerEvents = "none";
   dragged.style.opacity = "0.9";
-});
+  document.body.appendChild(dragged);
+  isDragging = true;
+}
 
-document.addEventListener("pointermove", (e) => {
-  if (isDragging && dragged) {
-    dragged.style.left = e.pageX - 50 + "px";
-    dragged.style.top = e.pageY - 50 + "px";
-  }
-});
+function moveDrag(e) {
+  if (!isDragging || !dragged) return;
+  dragged.style.left = e.pageX - 50 + "px";
+  dragged.style.top = e.pageY - 50 + "px";
+}
 
-document.addEventListener("pointerup", (e) => {
+function endDrag(e) {
   if (!isDragging || !dragged) return;
 
-  const x = e.clientX, y = e.clientY;
+  const x = e.clientX;
+  const y = e.clientY;
+
   const spriteRect = spriteArea.getBoundingClientRect();
   const programRect = programArea.getBoundingClientRect();
-  const characterRect = characterArea.getBoundingClientRect();
+  const charRect = characterArea.getBoundingClientRect();
 
-  // スプライト or プログラムエリア内にドロップされたら残す
+  // スプライトまたはプログラムエリア内なら配置
   if (
     (x > spriteRect.left && x < spriteRect.right &&
      y > spriteRect.top && y < spriteRect.bottom) ||
@@ -160,11 +162,12 @@ document.addEventListener("pointerup", (e) => {
      y > programRect.top && y < programRect.bottom)
   ) {
     dragged.style.pointerEvents = "auto";
+    dragged.style.opacity = "1.0";
   } else if (
-    x > characterRect.left && x < characterRect.right &&
-    y > characterRect.top && y < characterRect.bottom
+    x > charRect.left && x < charRect.right &&
+    y > charRect.top && y < charRect.bottom
   ) {
-    // 元のキャラクターエリアに戻したら削除
+    // 元のエリアに戻したら削除
     dragged.remove();
   } else {
     // その他の場所も削除（安全策）
@@ -173,7 +176,12 @@ document.addEventListener("pointerup", (e) => {
 
   dragged = null;
   isDragging = false;
-});
+}
+
+// 右下のテンプレキャラは「触るとコピーして持ち上げる」
+templateChar.addEventListener("pointerdown", startDrag);
+document.addEventListener("pointermove", moveDrag);
+document.addEventListener("pointerup", endDrag);
 </script>
 </body>
 </html>
