@@ -169,30 +169,28 @@ function pageToContainerPos(pageX, pageY, containerRect, elementW, elementH) {
 // template を触るとコピー作成して持ち上げる
 templateWrapper.addEventListener('pointerdown', (ev) => {
   ev.preventDefault();
-  // コピーを作る（サイズをテンプレと同じに）
   const tplRect = templateChar.getBoundingClientRect();
   const copy = document.createElement('div');
   copy.className = 'placed';
   copy.style.width = tplRect.width + 'px';
   copy.style.height = tplRect.height + 'px';
-  // 中の画像
+  copy.dataset.originalWidth = tplRect.width;
+  copy.dataset.originalHeight = tplRect.height;
+  // 画像
   const img = document.createElement('img');
   img.src = templateChar.src;
   img.draggable = false;
   copy.appendChild(img);
-  // 一時的に body に置いて動かす
+  // bodyに置いてドラッグ
   copy.style.position = 'absolute';
   copy.style.left = (ev.pageX - tplRect.width/2) + 'px';
   copy.style.top = (ev.pageY - tplRect.height/2) + 'px';
-  copy.style.pointerEvents = 'none'; // 移動中は当たり判定無効
-  copy.dataset.placed = 'false';
+  copy.style.pointerEvents = 'none';
   document.body.appendChild(copy);
 
   dragging = copy;
   draggingFromTemplate = true;
   pointerIdDown = ev.pointerId;
-
-  // capture may not be needed since we track document pointermove
 });
 
 // document 全体で move / up を監視
@@ -239,28 +237,20 @@ document.addEventListener('pointerup', (ev) => {
 
 /* 配置処理：bodyにあるドラッグ中要素を targetに移し、placed化する */
 function placeElementInContainer(el, targetContainer, ev) {
-  // get element size
-  const elW = parseFloat(el.style.width);
-  const elH = parseFloat(el.style.height);
+  const pos = pageToContainerPos(ev.pageX, ev.pageY, targetContainer.getBoundingClientRect(), parseFloat(el.style.width), parseFloat(el.style.height));
 
-  // get container rect
-  const contRect = targetContainer.getBoundingClientRect();
-
-  // compute left/top relative to container so that pointer is center
-  const pos = pageToContainerPos(ev.pageX, ev.pageY, contRect, elW, elH);
-
-  // wrap にして targetに移動
+  // wrapper を作るが、サイズはコピーのまま
   const wrapper = document.createElement('div');
   wrapper.className = 'placed';
-  wrapper.style.width = elW + 'px';
-  wrapper.style.height = elH + 'px';
+  wrapper.style.width = el.style.width;
+  wrapper.style.height = el.style.height;
   wrapper.style.left = pos.left + 'px';
   wrapper.style.top = pos.top + 'px';
   wrapper.style.position = 'absolute';
   wrapper.style.touchAction = 'none';
   wrapper.dataset.scale = 1.0;
 
-  // image
+  // 画像
   const img = document.createElement('img');
   img.src = el.querySelector('img').src;
   img.draggable = false;
@@ -271,13 +261,9 @@ function placeElementInContainer(el, targetContainer, ev) {
   rh.className = 'resize-handle';
   wrapper.appendChild(rh);
 
-  // add wrapper to container
   targetContainer.appendChild(wrapper);
+  el.remove(); // コピー削除
 
-  // cleanup original dragging element
-  el.remove();
-
-  // 付与する動作：移動とリサイズ
   makePlacedInteractive(wrapper, targetContainer);
 }
 
