@@ -1,275 +1,437 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="utf-8">
-<title>ブロックでうごかそう</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>キャラ配置（ドラッグ＆リサイズ）</title>
 <style>
-  body {
-    margin: 0;
-    overflow: hidden;
-    background-color: #fffaf0;
-    font-family: "Rounded Mplus 1c", sans-serif;
+  :root {
+    --bg: #fffaf0;
+    --accent: #00bcd4;
+    --sprite-bg: #e0f7fa;
   }
+  html,body { height:100%; margin:0; font-family: "Rounded Mplus 1c", sans-serif; background:var(--bg); -webkit-tap-highlight-color: transparent; }
+  button { font-family: inherit; }
 
-  #connectSection {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    flex-direction: column;
+  /* 接続画面 */
+  #connectSection { height:100vh; display:flex; align-items:center; justify-content:center; flex-direction:column; }
+  #connectButton { font-size:1.8rem; padding:14px 26px; background:var(--accent); color:#fff; border:none; border-radius:12px; }
+
+  /* メイン */
+  #mainUI { display:none; width:100vw; height:100vh; position:relative; overflow:hidden; }
+
+  /* 左：プログラム置き場 */
+  #programArea { position:absolute; left:0; top:0; width:50%; height:100%; background:#fff; border-right:3px solid #e0f2f1; touch-action:none; }
+
+  /* 右上：スプライト */
+  #spriteArea { position:absolute; right:0; top:0; width:50%; height:60%; background:var(--sprite-bg); border-bottom:3px solid #e0f2f1; display:flex; align-items:center; justify-content:center; color:#036; font-size:1.1rem; touch-action:none; }
+
+  /* 右下：テンプレートエリア */
+  #characterArea { position:absolute; right:0; bottom:0; width:50%; height:40%; background:#fff; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px; box-sizing:border-box; padding:12px; }
+  #templateWrapper { position:relative; width:120px; height:120px; display:flex; align-items:center; justify-content:center; }
+  #templateChar { width:100%; height:100%; object-fit:contain; user-select:none; touch-action:none; -webkit-user-drag:none; border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,0.15); }
+
+  /* ボタン */
+  #paintButton { font-size:1rem; padding:8px 12px; border-radius:10px; border:none; background:#ffb300; color:white; }
+
+  /* 設置された要素のラッパー */
+  .placed {
+    position:absolute;
+    touch-action:none;
+    user-select:none;
+    -webkit-user-drag:none;
   }
+  .placed img { display:block; width:100%; height:100%; object-fit:contain; border-radius:6px; }
 
-  #connectButton {
-    font-size: 2rem;
-    padding: 1rem 2rem;
-    background-color: #00bcd4;
-    color: white;
-    border: none;
-    border-radius: 1rem;
-  }
-
-  #mainUI {
-    display: none;
-    width: 100vw;
-    height: 100vh;
-    position: relative;
-  }
-
-  #programArea {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 50%;
-    height: 100%;
-    background-color: #ffffff;
-    border-right: 3px solid #ccc;
-  }
-
-  #spriteArea {
-    position: absolute;
-    right: 0;
-    top: 0;
-    width: 50%;
-    height: 60%;
-    background-color: #e0f7fa;
-    border-bottom: 3px solid #ccc;
-  }
-
-  #characterArea {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    width: 50%;
-    height: 40%;
-    background-color: #fff;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-direction: column;
-  }
-
-  #character {
-    width: 100px;
-    height: 100px;
-    user-select: none;
-    touch-action: none;
-    cursor: grab;
-  }
-
-  #paintButton {
-    margin-top: 10px;
-    font-size: 1.2rem;
-    background-color: #ffb300;
-    color: white;
-    border: none;
-    border-radius: 1rem;
-    padding: 0.5rem 1rem;
+  /* リサイズハンドル（小さな丸） */
+  .resize-handle {
+    position:absolute;
+    width:18px;
+    height:18px;
+    right:-9px; /* 半分外 */
+    top:-9px;
+    border-radius:50%;
+    background:#fff;
+    border:2px solid #666;
+    box-shadow:0 1px 3px rgba(0,0,0,0.25);
+    touch-action:none;
+    z-index:5;
   }
 
   /* おえかきモード */
   #paintArea {
-    display: none;
-    position: absolute;
-    top: 10%;
-    left: 10%;
-    width: 80%;
-    height: 80%;
-    background-color: white;
-    border: 3px solid #00bcd4;
-    z-index: 10;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    display:none;
+    position:absolute;
+    left:6%;
+    top:6%;
+    width:88%;
+    height:88%;
+    background:#fff;
+    border:3px solid var(--accent);
+    z-index:50;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    box-shadow:0 6px 20px rgba(0,0,0,0.15);
   }
-
-  #paintCanvas {
-    background-color: #f5f5f5;
-    border: 2px solid #ccc;
-    touch-action: none;
-  }
-
-  #saveDrawing {
-    margin-top: 10px;
-    background-color: #00bcd4;
-    color: white;
-    font-size: 1.2rem;
-    border: none;
-    border-radius: 1rem;
-    padding: 0.5rem 1rem;
-  }
-
-  #closePaint {
-    margin-top: 10px;
-    background-color: #aaa;
-    color: white;
-    font-size: 1.2rem;
-    border: none;
-    border-radius: 1rem;
-    padding: 0.5rem 1rem;
-  }
+  #paintCanvas { background:#fafafa; border:2px solid #ddd; touch-action:none; }
+  .paintBtns { margin-top:10px; display:flex; gap:8px; }
+  .smallBtn { padding:8px 12px; border-radius:10px; border:none; background:var(--accent); color:#fff; }
 </style>
 </head>
 <body>
-  <div id="connectSection">
-    <h1>ESP32とつなげよう！</h1>
-    <button id="connectButton">せつぞく</button>
+
+<div id="connectSection">
+  <h1>ESP32とつなげよう</h1>
+  <button id="connectButton">せつぞく</button>
+</div>
+
+<div id="mainUI">
+  <div id="programArea" aria-label="プログラムをおくばしょ"></div>
+
+  <div id="spriteArea">はいけい（ここにキャラをおけるよ）</div>
+
+  <div id="characterArea">
+    <div id="templateWrapper" title="ここをさわってコピーしてね">
+      <img id="templateChar" src="character.png" alt="キャラクターテンプレ" draggable="false">
+    </div>
+    <button id="paintButton">おえかきモード</button>
   </div>
 
-  <div id="mainUI">
-    <div id="programArea"></div>
-    <div id="spriteArea"></div>
-    <div id="characterArea">
-      <img id="character" src="character.png" draggable="false">
-      <button id="paintButton">おえかきモード</button>
-    </div>
-
-    <div id="paintArea">
-      <canvas id="paintCanvas" width="300" height="300"></canvas>
-      <button id="saveDrawing">このえをつかう</button>
-      <button id="closePaint">とじる</button>
+  <!-- おえかきモード -->
+  <div id="paintArea">
+    <canvas id="paintCanvas" width="360" height="360"></canvas>
+    <div class="paintBtns">
+      <button id="saveDrawing" class="smallBtn">このえをつかう</button>
+      <button id="clearDrawing" class="smallBtn" style="background:#888">けす</button>
+      <button id="closePaint" class="smallBtn" style="background:#aaa">とじる</button>
     </div>
   </div>
+</div>
 
 <script>
-let device, characteristic;
+/* ---------------------------
+   ESP32 接続（安定版） — 元に戻した形
+   - namePrefix "ESP32" を使う（必要なら "ESP32_BLE" に変更）
+   - サービス 0000ffe0..., キャラ 0000ffe1...
+   --------------------------- */
+const SERVICE_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb";
+const CHAR_UUID = "0000ffe1-0000-1000-8000-00805f9b34fb";
+let bleDevice = null, bleCharacteristic = null;
 
-// --- ESP32接続処理（安定版） ---
-async function connectToESP32() {
+document.getElementById("connectButton").addEventListener("click", async () => {
   try {
-    device = await navigator.bluetooth.requestDevice({
-      filters: [{ name: "ESP32_BLE" }],
-      optionalServices: [0xFFE0]
+    // 安定して動いていた構成に戻す（namePrefix: "ESP32"）
+    bleDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: "ESP32" }],
+      optionalServices: [SERVICE_UUID]
     });
-    const server = await device.gatt.connect();
-    const service = await server.getPrimaryService(0xFFE0);
-    characteristic = await service.getCharacteristic(0xFFE1);
+    const server = await bleDevice.gatt.connect();
+    const service = await server.getPrimaryService(SERVICE_UUID);
+    bleCharacteristic = await service.getCharacteristic(CHAR_UUID);
 
+    // 切替
     document.getElementById("connectSection").style.display = "none";
     document.getElementById("mainUI").style.display = "block";
-  } catch (error) {
-    alert("せつぞくにしっぱいしました");
-    console.error(error);
+    alert("ESP32につながったよ！");
+  } catch (err) {
+    console.error("BLE接続失敗:", err);
+    alert("せつぞくにしっぱいしました（もういちどためしてね）");
   }
-}
-document.getElementById("connectButton").addEventListener("click", connectToESP32);
+});
 
-// --- キャラクター配置 ---
-const templateChar = document.getElementById("character");
+/* ---------------------------
+   キャラコピー→配置→そのまま移動できるように
+   - templateを触ると「そのサイズのコピー」を作り、持ち上げる
+   - drop先が spriteArea または programArea のとき、そのコピーが「設置された要素（placed）」になる
+   - placedはその要素自体を持ち上げて移動可能（コピーを作らない）
+   - 右上に resize-handle を付け、中心を保って比率固定でリサイズ（center-distance法）
+   - テンプレートは常に残る（消えない）
+   --------------------------- */
+
+const templateChar = document.getElementById("templateChar");
+const templateWrapper = document.getElementById("templateWrapper");
 const spriteArea = document.getElementById("spriteArea");
 const programArea = document.getElementById("programArea");
 const characterArea = document.getElementById("characterArea");
 
-let dragged = null;
-let isDragging = false;
+let dragging = null;          // 現在持ち上げ中の要素（DOMノード）
+let draggingFromTemplate = false;
+let pointerIdDown = null;
 
-function startDrag(e) {
-  e.preventDefault();
-  dragged = templateChar.cloneNode(true);
-  dragged.removeAttribute("id");
-  dragged.style.position = "absolute";
-  dragged.style.left = e.pageX - 50 + "px";
-  dragged.style.top = e.pageY - 50 + "px";
-  dragged.style.pointerEvents = "none";
-  dragged.style.opacity = "0.9";
-  document.body.appendChild(dragged);
-  isDragging = true;
+// helper: ページ座標 -> コンテナ内左上座標
+function pageToContainerPos(pageX, pageY, containerRect, elementW, elementH) {
+  const left = pageX - containerRect.left - elementW / 2;
+  const top = pageY - containerRect.top - elementH / 2;
+  return { left, top };
 }
 
-function moveDrag(e) {
-  if (!isDragging || !dragged) return;
-  dragged.style.left = e.pageX - 50 + "px";
-  dragged.style.top = e.pageY - 50 + "px";
-}
+// template を触るとコピー作成して持ち上げる
+templateWrapper.addEventListener('pointerdown', (ev) => {
+  ev.preventDefault();
+  // コピーを作る（サイズをテンプレと同じに）
+  const tplRect = templateChar.getBoundingClientRect();
+  const copy = document.createElement('div');
+  copy.className = 'placed';
+  copy.style.width = tplRect.width + 'px';
+  copy.style.height = tplRect.height + 'px';
+  // 中の画像
+  const img = document.createElement('img');
+  img.src = templateChar.src;
+  img.draggable = false;
+  copy.appendChild(img);
+  // 一時的に body に置いて動かす
+  copy.style.position = 'absolute';
+  copy.style.left = (ev.pageX - tplRect.width/2) + 'px';
+  copy.style.top = (ev.pageY - tplRect.height/2) + 'px';
+  copy.style.pointerEvents = 'none'; // 移動中は当たり判定無効
+  copy.dataset.placed = 'false';
+  document.body.appendChild(copy);
 
-function endDrag(e) {
-  if (!isDragging || !dragged) return;
+  dragging = copy;
+  draggingFromTemplate = true;
+  pointerIdDown = ev.pointerId;
 
-  const x = e.clientX;
-  const y = e.clientY;
+  // capture may not be needed since we track document pointermove
+});
 
-  const spriteRect = spriteArea.getBoundingClientRect();
-  const programRect = programArea.getBoundingClientRect();
-  const charRect = characterArea.getBoundingClientRect();
+// document 全体で move / up を監視
+document.addEventListener('pointermove', (ev) => {
+  if (!dragging) return;
+  // only respond to same pointer that started
+  if (pointerIdDown != null && ev.pointerId !== pointerIdDown) return;
 
-  if (
-    (x > spriteRect.left && x < spriteRect.right &&
-     y > spriteRect.top && y < spriteRect.bottom) ||
-    (x > programRect.left && x < programRect.right &&
-     y > programRect.top && y < programRect.bottom)
-  ) {
-    dragged.style.pointerEvents = "auto";
-    dragged.style.opacity = "1.0";
+  // move element
+  const w = parseFloat(dragging.style.width);
+  const h = parseFloat(dragging.style.height);
+  dragging.style.left = (ev.pageX - w/2) + 'px';
+  dragging.style.top = (ev.pageY - h/2) + 'px';
+});
+
+document.addEventListener('pointerup', (ev) => {
+  if (!dragging) return;
+  if (pointerIdDown != null && ev.pointerId !== pointerIdDown) return;
+
+  // 判定：drop先が spriteArea or programArea -> 配置。そのほかは削除（右下に戻したら削除）
+  const dropX = ev.clientX;
+  const dropY = ev.clientY;
+  const spRect = spriteArea.getBoundingClientRect();
+  const prRect = programArea.getBoundingClientRect();
+  const chRect = characterArea.getBoundingClientRect();
+
+  if ((dropX > spRect.left && dropX < spRect.right && dropY > spRect.top && dropY < spRect.bottom)
+      || (dropX > prRect.left && dropX < prRect.right && dropY > prRect.top && dropY < prRect.bottom)) {
+    // 配置するコンテナを決める（優先：spriteArea）
+    const target = (dropX > spRect.left && dropX < spRect.right && dropY > spRect.top && dropY < spRect.bottom) ? spriteArea : programArea;
+    placeElementInContainer(dragging, target, ev);
+  } else if (dropX > chRect.left && dropX < chRect.right && dropY > chRect.top && dropY < chRect.bottom) {
+    // 元の右下に戻した = 削除
+    dragging.remove();
   } else {
-    dragged.remove();
+    // それ以外の場所も削除（安全）
+    dragging.remove();
   }
 
-  dragged = null;
-  isDragging = false;
+  dragging = null;
+  draggingFromTemplate = false;
+  pointerIdDown = null;
+});
+
+/* 配置処理：bodyにあるドラッグ中要素を targetに移し、placed化する */
+function placeElementInContainer(el, targetContainer, ev) {
+  // get element size
+  const elW = parseFloat(el.style.width);
+  const elH = parseFloat(el.style.height);
+
+  // get container rect
+  const contRect = targetContainer.getBoundingClientRect();
+
+  // compute left/top relative to container so that pointer is center
+  const pos = pageToContainerPos(ev.pageX, ev.pageY, contRect, elW, elH);
+
+  // wrap にして targetに移動
+  const wrapper = document.createElement('div');
+  wrapper.className = 'placed';
+  wrapper.style.width = elW + 'px';
+  wrapper.style.height = elH + 'px';
+  wrapper.style.left = pos.left + 'px';
+  wrapper.style.top = pos.top + 'px';
+  wrapper.style.position = 'absolute';
+  wrapper.style.touchAction = 'none';
+  wrapper.dataset.scale = 1.0;
+
+  // image
+  const img = document.createElement('img');
+  img.src = el.querySelector('img').src;
+  img.draggable = false;
+  wrapper.appendChild(img);
+
+  // resize handle
+  const rh = document.createElement('div');
+  rh.className = 'resize-handle';
+  wrapper.appendChild(rh);
+
+  // add wrapper to container
+  targetContainer.appendChild(wrapper);
+
+  // cleanup original dragging element
+  el.remove();
+
+  // 付与する動作：移動とリサイズ
+  makePlacedInteractive(wrapper, targetContainer);
 }
 
-templateChar.addEventListener("pointerdown", startDrag);
-document.addEventListener("pointermove", moveDrag);
-document.addEventListener("pointerup", endDrag);
+/* placed 要素に移動 & リサイズ機能を付与する */
+function makePlacedInteractive(wrapper, container) {
+  let moving = false;
+  let resizing = false;
+  let movePointerId = null;
+  let resizePointerId = null;
+  let startX=0, startY=0, startLeft=0, startTop=0, startW=0, startH=0;
+  let centerPageX=0, centerPageY=0, initDist=0;
 
-// --- おえかきモード ---
+  // pointerdown on the wrapper starts move (only when pointerdown not on handle)
+  wrapper.addEventListener('pointerdown', (ev) => {
+    // if target is handle, ignore here
+    if (ev.target.classList.contains('resize-handle')) return;
+    ev.preventDefault();
+    moving = true;
+    movePointerId = ev.pointerId;
+    startX = ev.clientX;
+    startY = ev.clientY;
+    startLeft = parseFloat(wrapper.style.left);
+    startTop = parseFloat(wrapper.style.top);
+    // bring to front
+    wrapper.style.zIndex = 100;
+  });
+
+  document.addEventListener('pointermove', (ev) => {
+    if (moving && ev.pointerId === movePointerId) {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      wrapper.style.left = (startLeft + dx) + 'px';
+      wrapper.style.top = (startTop + dy) + 'px';
+    } else if (resizing && ev.pointerId === resizePointerId) {
+      // resizing by center-distance method
+      const contRect = container.getBoundingClientRect();
+      // center in page coords
+      centerPageX = contRect.left + parseFloat(wrapper.style.left) + parseFloat(wrapper.style.width)/2;
+      centerPageY = contRect.top + parseFloat(wrapper.style.top) + parseFloat(wrapper.style.height)/2;
+      const curDist = Math.hypot(ev.clientX - centerPageX, ev.clientY - centerPageY);
+      let scale = curDist / initDist;
+      if (!isFinite(scale) || scale <= 0) scale = 0.01;
+      // clamp
+      scale = Math.max(0.2, Math.min(4.0, scale));
+      const newW = startW * scale;
+      const newH = startH * scale;
+      // keep center fixed -> compute new left/top relative to container
+      const newLeft = (centerPageX - contRect.left) - newW/2;
+      const newTop  = (centerPageY - contRect.top) - newH/2;
+      wrapper.style.width = newW + 'px';
+      wrapper.style.height = newH + 'px';
+      wrapper.style.left = newLeft + 'px';
+      wrapper.style.top = newTop + 'px';
+    }
+  });
+
+  document.addEventListener('pointerup', (ev) => {
+    if (moving && ev.pointerId === movePointerId) {
+      moving = false;
+      movePointerId = null;
+      wrapper.style.zIndex = '';
+      // check if moved back to characterArea -> delete
+      const chRect = characterArea.getBoundingClientRect();
+      const absLeft = container.getBoundingClientRect().left + parseFloat(wrapper.style.left);
+      const absTop  = container.getBoundingClientRect().top + parseFloat(wrapper.style.top);
+      const midX = absLeft + parseFloat(wrapper.style.width)/2;
+      const midY = absTop + parseFloat(wrapper.style.height)/2;
+      if (midX > chRect.left && midX < chRect.right && midY > chRect.top && midY < chRect.bottom) {
+        wrapper.remove();
+      }
+    }
+    if (resizing && ev.pointerId === resizePointerId) {
+      resizing = false;
+      resizePointerId = null;
+    }
+  });
+
+  // resize handle events
+  const handle = wrapper.querySelector('.resize-handle');
+  handle.addEventListener('pointerdown', (ev) => {
+    ev.stopPropagation();
+    ev.preventDefault();
+    resizing = true;
+    resizePointerId = ev.pointerId;
+    startW = parseFloat(wrapper.style.width);
+    startH = parseFloat(wrapper.style.height);
+    const contRect = container.getBoundingClientRect();
+    centerPageX = contRect.left + parseFloat(wrapper.style.left) + startW/2;
+    centerPageY = contRect.top  + parseFloat(wrapper.style.top) + startH/2;
+    initDist = Math.hypot(ev.clientX - centerPageX, ev.clientY - centerPageY);
+    if (initDist < 1) initDist = 1;
+    // bring to front
+    wrapper.style.zIndex = 200;
+  });
+}
+
+/* ---------------------------
+   おえかきモード（キャンバス） — 描いた絵をテンプレに反映
+   --------------------------- */
 const paintButton = document.getElementById("paintButton");
 const paintArea = document.getElementById("paintArea");
 const paintCanvas = document.getElementById("paintCanvas");
-const ctx = paintCanvas.getContext("2d");
+const saveDrawing = document.getElementById("saveDrawing");
+const closePaint = document.getElementById("closePaint");
+const clearDrawing = document.getElementById("clearDrawing");
+const pctx = paintCanvas.getContext('2d');
+
+paintButton.addEventListener('click', () => {
+  paintArea.style.display = 'flex';
+  // clear canvas
+  pctx.fillStyle = '#ffffff';
+  pctx.fillRect(0,0,paintCanvas.width,paintCanvas.height);
+  // draw existing template image as background (optional)
+  const tmp = new Image();
+  tmp.onload = () => { pctx.drawImage(tmp, 0, 0, paintCanvas.width, paintCanvas.height); };
+  tmp.src = templateChar.src;
+});
+
 let drawing = false;
-
-paintButton.addEventListener("click", () => {
-  paintArea.style.display = "flex";
-  ctx.clearRect(0, 0, paintCanvas.width, paintCanvas.height);
-});
-
-paintCanvas.addEventListener("pointerdown", (e) => {
+let lastX = 0, lastY = 0;
+paintCanvas.addEventListener('pointerdown', (ev) => {
   drawing = true;
-  ctx.beginPath();
-  ctx.moveTo(e.offsetX, e.offsetY);
+  const rect = paintCanvas.getBoundingClientRect();
+  lastX = ev.clientX - rect.left;
+  lastY = ev.clientY - rect.top;
 });
-paintCanvas.addEventListener("pointermove", (e) => {
-  if (drawing) {
-    ctx.lineTo(e.offsetX, e.offsetY);
-    ctx.strokeStyle = "#000";
-    ctx.lineWidth = 4;
-    ctx.lineCap = "round";
-    ctx.stroke();
-  }
+paintCanvas.addEventListener('pointermove', (ev) => {
+  if (!drawing) return;
+  const rect = paintCanvas.getBoundingClientRect();
+  const x = ev.clientX - rect.left;
+  const y = ev.clientY - rect.top;
+  pctx.lineJoin = 'round';
+  pctx.lineCap = 'round';
+  pctx.strokeStyle = '#000';
+  pctx.lineWidth = 8;
+  pctx.beginPath();
+  pctx.moveTo(lastX, lastY);
+  pctx.lineTo(x, y);
+  pctx.stroke();
+  lastX = x; lastY = y;
 });
-paintCanvas.addEventListener("pointerup", () => drawing = false);
-paintCanvas.addEventListener("pointerleave", () => drawing = false);
+paintCanvas.addEventListener('pointerup', ()=> drawing = false);
+paintCanvas.addEventListener('pointerleave', ()=> drawing = false);
 
-// 絵をキャラに反映
-document.getElementById("saveDrawing").addEventListener("click", () => {
-  const imgData = paintCanvas.toDataURL("image/png");
-  templateChar.src = imgData;
-  paintArea.style.display = "none";
+saveDrawing.addEventListener('click', () => {
+  const data = paintCanvas.toDataURL('image/png');
+  templateChar.src = data; // テンプレに反映
+  paintArea.style.display = 'none';
 });
-
-// 閉じる
-document.getElementById("closePaint").addEventListener("click", () => {
-  paintArea.style.display = "none";
+closePaint.addEventListener('click', () => paintArea.style.display = 'none');
+clearDrawing.addEventListener('click', () => {
+  pctx.clearRect(0,0,paintCanvas.width,paintCanvas.height);
+  pctx.fillStyle = '#fff';
+  pctx.fillRect(0,0,paintCanvas.width,paintCanvas.height);
 });
 </script>
 </body>
