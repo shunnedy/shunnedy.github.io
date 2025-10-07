@@ -236,21 +236,18 @@ document.addEventListener('pointerup', (ev) => {
 });
 
 /* 配置処理：bodyにあるドラッグ中要素を targetに移し、placed化する */
-function placeElementInContainer(el, targetContainer, ev) {
+function placeElementInContainer(el, targetContainer) {
   const rect = el.getBoundingClientRect();
-  // 画面座標に基づく left/top
-  const leftPage = rect.left + window.scrollX;
-  const topPage = rect.top + window.scrollY;
-
-  const contRect = targetContainer.getBoundingClientRect();
+  const containerRect = targetContainer.getBoundingClientRect();
 
   const wrapper = document.createElement('div');
   wrapper.className = 'placed';
-  wrapper.style.width = rect.width + 'px';
-  wrapper.style.height = rect.height + 'px';
   wrapper.style.position = 'absolute';
-  wrapper.style.left = (leftPage - contRect.left) + 'px'; // container相対に変換
-  wrapper.style.top  = (topPage  - contRect.top)  + 'px';
+  wrapper.style.width  = rect.width + 'px';
+  wrapper.style.height = rect.height + 'px';
+  // container 相対に変換
+  wrapper.style.left = (rect.left - containerRect.left) + 'px';
+  wrapper.style.top  = (rect.top  - containerRect.top) + 'px';
   wrapper.dataset.scale = 1.0;
 
   const img = document.createElement('img');
