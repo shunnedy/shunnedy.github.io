@@ -2,185 +2,178 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ESP32 ブロックプログラミング（プロトタイプ）</title>
+<title>ブロックでうごかそう</title>
 <style>
   body {
     margin: 0;
-    font-family: "Hiragino Maru Gothic ProN", "Rounded Mplus 1c", sans-serif;
-    background-color: #f0f8ff;
     overflow: hidden;
-    touch-action: none;
-  }
-  #connect-screen {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    height: 100vh;
-    background: linear-gradient(to bottom right, #b3e5fc, #e1f5fe);
-  }
-  #connect-button {
-    font-size: 1.5rem;
-    padding: 15px 30px;
-    border: none;
-    border-radius: 12px;
-    background-color: #4fc3f7;
-    color: white;
-    cursor: pointer;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-  }
-  #connect-button:active {
-    background-color: #039be5;
+    background-color: #fffaf0;
+    font-family: "Rounded Mplus 1c", sans-serif;
   }
 
-  /* メイン画面 */
-  #main-screen {
+  #connectSection {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    flex-direction: column;
+  }
+
+  #connectButton {
+    font-size: 2rem;
+    padding: 1rem 2rem;
+    background-color: #00bcd4;
+    color: white;
+    border: none;
+    border-radius: 1rem;
+  }
+
+  #mainUI {
     display: none;
     width: 100vw;
     height: 100vh;
     position: relative;
   }
 
-  #program-area {
+  /* 左：プログラムエリア */
+  #programArea {
     position: absolute;
     left: 0;
     top: 0;
     width: 50%;
     height: 100%;
-    background-color: white;
-    border-right: 3px solid #90caf9;
+    background-color: #ffffff;
+    border-right: 3px solid #ccc;
   }
 
-  #sprite-area {
+  /* 右上：スプライトエリア */
+  #spriteArea {
     position: absolute;
     right: 0;
     top: 0;
     width: 50%;
-    height: 50%;
-    background-color: #aee7ff; /* 初期みずいろ */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.2rem;
+    height: 60%;
+    background-color: #e0f7fa;
+    border-bottom: 3px solid #ccc;
   }
 
-  #character-area {
+  /* 右下：キャラクター置き場 */
+  #characterArea {
     position: absolute;
     right: 0;
     bottom: 0;
     width: 50%;
-    height: 50%;
+    height: 40%;
     background-color: #fff;
     display: flex;
-    align-items: center;
     justify-content: center;
-    flex-direction: column;
+    align-items: center;
   }
 
   #character {
-    width: 150px;
-    height: auto;
+    width: 100px;
+    height: 100px;
+    cursor: grab;
     user-select: none;
     touch-action: none;
-    cursor: grab;
-  }
-
-  #draw-button {
-    font-size: 1.2rem;
-    padding: 8px 20px;
-    border: none;
-    border-radius: 10px;
-    background-color: #ffcc80;
-    margin-top: 10px;
   }
 </style>
 </head>
 <body>
-
-<!-- 接続画面 -->
-<div id="connect-screen">
-  <h1>ESP32とつなげよう！</h1>
-  <button id="connect-button">つなぐ</button>
-</div>
-
-<!-- メイン画面 -->
-<div id="main-screen">
-  <div id="program-area"></div>
-  <div id="sprite-area">はいけい（いろをタップしてかえよう）</div>
-  <div id="character-area">
-    <img id="character" src="character.png" alt="キャラクター">
-    <button id="draw-button">えをかく</button>
+  <div id="connectSection">
+    <h1>ESP32とつなげよう！</h1>
+    <button id="connectButton">せつぞく</button>
   </div>
-</div>
+
+  <div id="mainUI">
+    <div id="programArea"></div>
+    <div id="spriteArea"></div>
+    <div id="characterArea">
+      <img id="character" src="character.png" draggable="false">
+    </div>
+  </div>
 
 <script>
-let bleDevice, bleServer, service, writeCharacteristic;
-const SERVICE_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb";
-const CHARACTERISTIC_UUID = "0000ffe1-0000-1000-8000-00805f9b34fb";
+let device, characteristic;
 
-const connectButton = document.getElementById("connect-button");
-const connectScreen = document.getElementById("connect-screen");
-const mainScreen = document.getElementById("main-screen");
-
-connectButton.addEventListener("click", async () => {
+// BLE接続
+async function connectToESP32() {
   try {
-    bleDevice = await navigator.bluetooth.requestDevice({
-      filters: [{ namePrefix: "ESP32" }],
-      optionalServices: [SERVICE_UUID],
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ name: "ESP32_BLE" }],
+      optionalServices: [0xFFE0]
     });
-    bleServer = await bleDevice.gatt.connect();
-    service = await bleServer.getPrimaryService(SERVICE_UUID);
-    writeCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(0xFFE0);
+    characteristic = await service.getCharacteristic(0xFFE1);
+    document.getElementById("connectSection").style.display = "none";
+    document.getElementById("mainUI").style.display = "block";
+  } catch (error) {
+    alert("せつぞくにしっぱいしました");
+    console.error(error);
+  }
+}
 
-    // 接続完了 → メイン画面に切り替え
-    connectScreen.style.display = "none";
-    mainScreen.style.display = "block";
-    alert("ESP32につながったよ！");
-  } catch (e) {
-    alert("つながらなかったよ…もういちどためしてね。");
-    console.error(e);
+document.getElementById("connectButton").addEventListener("click", connectToESP32);
+
+// --- ドラッグ＆ドロップ ---
+const character = document.getElementById("character");
+const spriteArea = document.getElementById("spriteArea");
+const programArea = document.getElementById("programArea");
+const characterArea = document.getElementById("characterArea");
+
+let isDragging = false;
+let offsetX = 0, offsetY = 0;
+let dragged = null;
+
+character.addEventListener("pointerdown", (e) => {
+  isDragging = true;
+  dragged = e.target.cloneNode(true); // コピーを作る
+  document.body.appendChild(dragged);
+  dragged.style.position = "absolute";
+  dragged.style.left = e.pageX - 50 + "px";
+  dragged.style.top = e.pageY - 50 + "px";
+  dragged.style.pointerEvents = "none";
+  dragged.style.opacity = "0.9";
+});
+
+document.addEventListener("pointermove", (e) => {
+  if (isDragging && dragged) {
+    dragged.style.left = e.pageX - 50 + "px";
+    dragged.style.top = e.pageY - 50 + "px";
   }
 });
 
-// 🩵 スプライトの色変更
-const spriteArea = document.getElementById("sprite-area");
-spriteArea.addEventListener("click", () => {
-  const colors = ["#aee7ff", "#ffe0b2", "#c8e6c9", "#f8bbd0", "#d1c4e9"];
-  const current = spriteArea.style.backgroundColor;
-  let next = colors[Math.floor(Math.random() * colors.length)];
-  while (next === current) next = colors[Math.floor(Math.random() * colors.length)];
-  spriteArea.style.backgroundColor = next;
-});
+document.addEventListener("pointerup", (e) => {
+  if (!isDragging || !dragged) return;
 
-// 🧍キャラクターをドラッグ移動（右半分で自由に動かせる）
-const character = document.getElementById("character");
-let dragging = false;
-let offsetX, offsetY;
+  const x = e.clientX, y = e.clientY;
+  const spriteRect = spriteArea.getBoundingClientRect();
+  const programRect = programArea.getBoundingClientRect();
+  const characterRect = characterArea.getBoundingClientRect();
 
-character.addEventListener("touchstart", (e) => {
-  dragging = true;
-  const rect = character.getBoundingClientRect();
-  offsetX = e.touches[0].clientX - rect.left;
-  offsetY = e.touches[0].clientY - rect.top;
-});
+  // スプライト or プログラムエリア内にドロップされたら残す
+  if (
+    (x > spriteRect.left && x < spriteRect.right &&
+     y > spriteRect.top && y < spriteRect.bottom) ||
+    (x > programRect.left && x < programRect.right &&
+     y > programRect.top && y < programRect.bottom)
+  ) {
+    dragged.style.pointerEvents = "auto";
+  } else if (
+    x > characterRect.left && x < characterRect.right &&
+    y > characterRect.top && y < characterRect.bottom
+  ) {
+    // 元のキャラクターエリアに戻したら削除
+    dragged.remove();
+  } else {
+    // その他の場所も削除（安全策）
+    dragged.remove();
+  }
 
-character.addEventListener("touchmove", (e) => {
-  if (!dragging) return;
-  const x = e.touches[0].clientX - offsetX;
-  const y = e.touches[0].clientY - offsetY;
-  character.style.position = "absolute";
-  character.style.left = x + "px";
-  character.style.top = y + "px";
-});
-
-character.addEventListener("touchend", () => dragging = false);
-
-// 「えをかく」ボタンは今は未実装（今後キャンバスモードに切り替え）
-document.getElementById("draw-button").addEventListener("click", () => {
-  alert("🎨 じぶんのキャラクターをかけるようにするよ（じゅんびちゅう）");
+  dragged = null;
+  isDragging = false;
 });
 </script>
-
 </body>
 </html>
