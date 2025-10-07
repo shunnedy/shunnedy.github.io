@@ -163,7 +163,6 @@ async function connectToESP32() {
     const server = await device.gatt.connect();
     const service = await server.getPrimaryService(0xFFE0);
     characteristic = await service.getCharacteristic(0xFFE1);
-
     document.getElementById("connectSection").style.display = "none";
     document.getElementById("mainUI").style.display = "block";
   } catch (error) {
