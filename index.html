@@ -1,103 +1,125 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
-  <meta charset="utf-8">
-  <title>ESP32ドットマトリクスであそぼう！</title>
-  <script src="https://unpkg.com/blockly/blockly.min.js"></script>
-  <style>
-    body { font-family: sans-serif; text-align: center; background: #f9fafb; }
-    #blocklyDiv { height: 480px; width: 100%; margin-top: 10px; }
-    button { font-size: 20px; padding: 10px 20px; margin: 10px; border-radius: 10px; }
-  </style>
+<meta charset="UTF-8">
+<title>ひかるブロックプログラミング</title>
+<script src="https://unpkg.com/blockly/blockly.min.js"></script>
+<style>
+  body { font-family: sans-serif; text-align: center; background: #f8fafc; }
+  #blocklyDiv { height: 400px; width: 90%; margin: auto; border-radius: 12px; overflow: hidden; }
+  button { margin: 10px; padding: 10px 20px; font-size: 18px; border-radius: 10px; }
+</style>
 </head>
 <body>
-  <h1>💡 ドットマトリクスであそぼう！</h1>
-  <div id="blocklyDiv"></div>
-  <xml id="toolbox" style="display:none">
-    <block type="show_text"></block>
-    <block type="wave"></block>
-    <block type="blink"></block>
-  </xml>
-  <button id="connectBtn">🔗 ESP32とつなぐ</button>
-  <button id="runBtn">▶ うごかす</button>
+<h1>🌈 ひかるブロックプログラミング</h1>
+<button id="connect">🔗 ESP32とつなぐ</button>
+<button id="run">▶️ うごかす</button>
+<div id="blocklyDiv"></div>
 
-  <script>
-    // ==== ブロック定義 ====
-    Blockly.defineBlocksWithJsonArray([
-      {
-        "type": "show_text",
-        "message0": "文字を表示 %1",
-        "args0": [{ "type": "field_input", "name": "TEXT", "text": "こんにちは！" }],
-        "previousStatement": null,
-        "nextStatement": null,
-        "colour": 160
-      },
-      {
-        "type": "wave",
-        "message0": "なみアニメーション",
-        "previousStatement": null,
-        "nextStatement": null,
-        "colour": 210
-      },
-      {
-        "type": "blink",
-        "message0": "ピカピカ点滅",
-        "previousStatement": null,
-        "nextStatement": null,
-        "colour": 60
-      }
-    ]);
+<script>
+const SERVICE_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb";
+const CHARACTERISTIC_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb";
+let characteristic = null;
 
-    // ==== JavaScript変換 ====
-    Blockly.JavaScript['show_text'] = block => {
-      const text = block.getFieldValue('TEXT');
-      return `sendBLE('TEXT:${text}');\n`;
-    };
-    Blockly.JavaScript['wave'] = () => `sendBLE('WAVE');\n`;
-    Blockly.JavaScript['blink'] = () => `sendBLE('BLINK');\n`;
+// Blockly初期化
+const workspace = Blockly.inject('blocklyDiv', {
+  toolbox: {
+    kind: 'flyoutToolbox',
+    contents: [
+      { kind: 'block', type: 'show_text' },
+      { kind: 'block', type: 'show_shape' },
+      { kind: 'block', type: 'play_anim' }
+    ]
+  }
+});
 
-    // ==== Blockly初期化 ====
-    const workspace = Blockly.inject('blocklyDiv', { toolbox: document.getElementById('toolbox') });
+// ブロック定義
+Blockly.defineBlocksWithJsonArray([
+  {
+    "type": "show_text",
+    "message0": "文字 %1 をひょうじ",
+    "args0": [{ "type": "field_input", "name": "TEXT", "text": "HELLO" }],
+    "colour": 160,
+    "tooltip": "文字をスクロールで表示します",
+    "output": null
+  },
+  {
+    "type": "show_shape",
+    "message0": "%1 のかたちをつける",
+    "args0": [{
+      "type": "field_dropdown",
+      "name": "SHAPE",
+      "options": [
+        ["ハート", "HEART"],
+        ["まる", "CIRCLE"],
+        ["スマイル", "SMILE"]
+      ]
+    }],
+    "colour": 20,
+    "output": null
+  },
+  {
+    "type": "play_anim",
+    "message0": "%1 アニメをみせる",
+    "args0": [{
+      "type": "field_dropdown",
+      "name": "ANIM",
+      "options": [
+        ["ピカピカ", "BLINK"],
+        ["ウェーブ", "WAVE"],
+        ["レインボー", "RAINBOW"]
+      ]
+    }],
+    "colour": 260,
+    "output": null
+  }
+]);
 
-    // ==== Web Bluetooth ====
-    let bleCharacteristic = null;
-    const SERVICE_UUID = '0000ffe0-0000-1000-8000-00805f9b34fb';
-    const CHARACTERISTIC_UUID = '0000ffe0-0000-1000-8000-00805f9b34fb';
+// JS生成
+Blockly.JavaScript['show_text'] = (block) => {
+  const text = block.getFieldValue('TEXT');
+  return `"TEXT:${text}"`;
+};
+Blockly.JavaScript['show_shape'] = (block) => {
+  const shape = block.getFieldValue('SHAPE');
+  return `"SHAPE:${shape}"`;
+};
+Blockly.JavaScript['play_anim'] = (block) => {
+  const anim = block.getFieldValue('ANIM');
+  return `"ANIM:${anim}"`;
+};
 
-    async function connectBLE() {
-      try {
-        const device = await navigator.bluetooth.requestDevice({
-          filters: [{ services: [SERVICE_UUID] }]
-        });
-        const server = await device.gatt.connect();
-        const service = await server.getPrimaryService(SERVICE_UUID);
-        bleCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
-        alert('✅ ESP32と接続しました！');
-      } catch (e) {
-        alert('❌ 接続に失敗しました: ' + e);
-      }
-    }
+// BLE接続
+document.getElementById('connect').onclick = async () => {
+  try {
+    const device = await navigator.bluetooth.requestDevice({
+      filters: [{ name: "ESP32_LED_Display" }],
+      optionalServices: [SERVICE_UUID]
+    });
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(SERVICE_UUID);
+    characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+    alert("✅ ESP32とつながったよ！");
+  } catch (e) {
+    alert("❌ 接続エラー: " + e);
+  }
+};
 
-    async function sendBLE(msg) {
-      if (!bleCharacteristic) {
-        alert('先に「ESP32とつなぐ」を押してね！');
-        return;
-      }
-      const encoder = new TextEncoder();
-      await bleCharacteristic.writeValue(encoder.encode(msg));
-    }
-
-    // ==== イベント ====
-    document.getElementById('connectBtn').onclick = connectBLE;
-    document.getElementById('runBtn').onclick = () => {
-      const code = Blockly.JavaScript.workspaceToCode(workspace);
-      try {
-        eval(code);
-      } catch (e) {
-        console.error(e);
-        alert('ブロックの実行中にエラーが起きたよ！');
-      }
-    };
-  </script>
+// 実行
+document.getElementById('run').onclick = async () => {
+  if (!characteristic) {
+    alert("ESP32とつないでね！");
+    return;
+  }
+  const code = Blockly.JavaScript.workspaceToCode(workspace);
+  const commands = code.split('\n').filter(c => c.length > 0);
+  const encoder = new TextEncoder();
+  for (const cmd of commands) {
+    await characteristic.writeValue(encoder.encode(eval(cmd)));
+    await new Promise(r => setTimeout(r, 800));
+  }
+  alert("✨ うごかしたよ！");
+};
+</script>
 </body>
 </html>
