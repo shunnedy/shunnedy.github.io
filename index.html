@@ -1,91 +1,62 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ESP32 BLE Text Sender</title>
+  <meta charset="UTF-8">
+  <title>ESP32 BLE LED送信</title>
   <style>
-    body {
-      font-family: sans-serif;
-      background: #f9fafb;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
-    }
-    h1 { color: #333; margin-bottom: 20px; }
-    input {
-      font-size: 1.2rem;
-      padding: 10px;
-      width: 250px;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      margin-bottom: 10px;
-      outline: none;
-    }
-    button {
-      font-size: 1.1rem;
-      padding: 10px 20px;
-      margin: 5px;
-      border: none;
-      border-radius: 8px;
-      background-color: #4caf50;
-      color: white;
-      cursor: pointer;
-    }
-    button:disabled {
-      background-color: #999;
-      cursor: not-allowed;
-    }
+    body { font-family: sans-serif; text-align: center; margin-top: 50px; }
+    input { width: 200px; font-size: 16px; padding: 6px; }
+    button { margin: 10px; padding: 10px 20px; font-size: 16px; }
   </style>
 </head>
 <body>
-  <h1>ESP32 BLE テキスト送信</h1>
-  <button id="connect">🔗 ESP32と接続</button>
-  <input id="textInput" type="text" placeholder="表示したい文字を入力">
-  <button id="send" disabled>📤 送信</button>
+  <h1>ESP32 MAX7219へ送信</h1>
+  <button id="connect">🔗 接続</button><br>
+  <input id="textInput" type="text" placeholder="表示文字を入力" />
+  <button id="send">📤 送信</button>
 
   <script>
-    let bleDevice = null;
-    let bleServer = null;
-    let service = null;
-    let writeCharacteristic = null;
-
-    // あなたのESP32が使っているUUID
     const SERVICE_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb";
-    const CHARACTERISTIC_UUID = "0000ffe1-0000-1000-8000-00805f9b34fb";
+    const CHARACTERISTIC_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb";
+    let characteristic = null;
 
+    // 接続ボタン押下
     document.getElementById("connect").addEventListener("click", async () => {
       try {
-        console.log("BLEデバイスを検索中...");
-        bleDevice = await navigator.bluetooth.requestDevice({
-          filters: [{ namePrefix: "ESP32" }], // "ESP32_BLE"でも可
-          optionalServices: [SERVICE_UUID],
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ name: "ESP32_LED_Display" }], // ESP32の名前
+          optionalServices: [SERVICE_UUID]
         });
 
-        bleServer = await bleDevice.gatt.connect();
-        service = await bleServer.getPrimaryService(SERVICE_UUID);
-        writeCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
 
-        document.getElementById("send").disabled = false;
-        alert("✅ 接続完了: " + bleDevice.name);
+        alert("✅ 接続完了！");
       } catch (error) {
         console.error(error);
-        alert("接続失敗: " + error);
+        alert("❌ 接続失敗: " + error);
       }
     });
 
+    // 送信ボタン押下
     document.getElementById("send").addEventListener("click", async () => {
+      if (!characteristic) {
+        alert("先にESP32へ接続してください");
+        return;
+      }
+
       const text = document.getElementById("textInput").value;
-      if (!text || !writeCharacteristic) return;
+      if (!text) {
+        alert("文字を入力してください");
+        return;
+      }
 
       try {
         const encoder = new TextEncoder();
         const data = encoder.encode(text);
-        await writeCharacteristic.writeValue(data);
-        alert("📤 送信完了: " + text);
+        await characteristic.writeValue(data);
+        alert(`📡 送信完了: ${text}`);
       } catch (error) {
         console.error(error);
         alert("送信エラー: " + error);
