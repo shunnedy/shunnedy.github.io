@@ -1,133 +1,67 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<title>ひかるブロックプログラミング</title>
-<script src="https://unpkg.com/blockly/blockly.min.js"></script>
-<style>
-  body { font-family: sans-serif; text-align: center; background: #f8fafc; }
-  #blocklyDiv { height: 400px; width: 90%; margin: auto; border-radius: 12px; overflow: hidden; }
-  button { margin: 10px; padding: 10px 20px; font-size: 18px; border-radius: 10px; }
-</style>
+  <meta charset="UTF-8">
+  <title>ESP32 BLE LED送信</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; margin-top: 50px; }
+    input { width: 200px; font-size: 16px; padding: 6px; }
+    button { margin: 10px; padding: 10px 20px; font-size: 16px; }
+  </style>
 </head>
 <body>
-<h1>🌈 ひかるブロックプログラミング</h1>
-<button id="connect">🔗 ESP32とつなぐ</button>
-<button id="run">▶️ うごかす</button>
-<div id="blocklyDiv"></div>
+  <h1>ESP32 MAX7219へ送信</h1>
+  <button id="connect">🔗 接続</button><br>
+  <input id="textInput" type="text" placeholder="表示文字を入力" />
+  <button id="send">📤 送信</button>
 
-<script>
-const SERVICE_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb";
-const CHARACTERISTIC_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb";
-let characteristic = null;
+  <script>
+    const SERVICE_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb";
+    const CHARACTERISTIC_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb";
+    let characteristic = null;
 
-// Blockly初期化
-const workspace = Blockly.inject('blocklyDiv', {
-  toolbox: {
-    kind: 'flyoutToolbox',
-    contents: [
-      { kind: 'block', type: 'show_text' },
-      { kind: 'block', type: 'show_shape' },
-      { kind: 'block', type: 'play_anim' }
-    ]
-  }
-});
+    // 接続ボタン押下
+    document.getElementById("connect").addEventListener("click", async () => {
+      try {
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ name: "ESP32_LED_Display" }], // ESP32の名前
+          optionalServices: [SERVICE_UUID]
+        });
 
-// ブロック定義
-// ブロック定義
-Blockly.defineBlocksWithJsonArray([
-  {
-    "message0": "文字 %1 をひょうじ",
-    "args0": [{ "type": "field_input", "name": "TEXT", "text": "HELLO" }],
-    "colour": 160,
-    "tooltip": "文字をスクロールで表示します",
-    "previousStatement": null, // これを追加することで、ブロックを連結可能にする
-    "nextStatement": null
-  },
-  {
-    "message0": "%1 のかたちをつける",
-    "args0": [{
-      "type": "field_dropdown",
-      "name": "SHAPE",
-      "options": [
-        ["ハート", "HEART"],
-        ["まる", "CIRCLE"],
-        ["スマイル", "SMILE"]
-      ]
-    }],
-    "colour": 20,
-    "tooltip": "指定した図形をひょうじ", // ツールチップを追加
-    "previousStatement": null,
-    "nextStatement": null
-  },
-  {
-    "message0": "%1 アニメをみせる",
-    "args0": [{
-      "type": "field_dropdown",
-      "name": "ANIM",
-      "options": [
-        ["ピカピカ", "BLINK"],
-        ["ウェーブ", "WAVE"],
-        ["レインボー", "RAINBOW"]
-      ]
-    }],
-    "colour": 260,
-    "tooltip": "アニメーションを再生", // ツールチップを追加
-    "previousStatement": null,
-    "nextStatement": null
-  }
-]);
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
 
-// JS生成
-Blockly.JavaScript['show_text'] = (block) => {
-  const text = block.getFieldValue('TEXT');
-  return `"TEXT:${text}";\n`; // return文の末尾にセミコロンと改行を追加
-};
-Blockly.JavaScript['show_shape'] = (block) => {
-  const shape = block.getFieldValue('SHAPE');
-  return `"SHAPE:${shape}";\n`;
-};
-Blockly.JavaScript['play_anim'] = (block) => {
-  const anim = block.getFieldValue('ANIM');
-  return `"ANIM:${anim}";\n`;
-};
-
-// BLE接続
-document.getElementById('connect').onclick = async () => {
-  try {
-    const device = await navigator.bluetooth.requestDevice({
-      filters: [{ name: "ESP32_LED_Display" }],
-      optionalServices: [SERVICE_UUID]
+        alert("✅ 接続完了！");
+      } catch (error) {
+        console.error(error);
+        alert("❌ 接続失敗: " + error);
+      }
     });
-    const server = await device.gatt.connect();
-    const service = await server.getPrimaryService(SERVICE_UUID);
-    characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
-    alert("✅ ESP32とつながったよ！");
-  } catch (e) {
-    alert("❌ 接続エラー: " + e);
-  }
-};
 
-// 実行
-document.getElementById('run').onclick = async () => {
-  if (!characteristic) {
-    alert("ESP32とつないでね！");
-    return;
-  }
-  const code = Blockly.JavaScript.workspaceToCode(workspace);
-  const commands = code.match(/"[^"]*"/g); // 正規表現で文字列を抽出
-  if (!commands) {
-    alert("ブロックを配置してね！");
-    return;
-  }
-  const encoder = new TextEncoder();
-  for (const cmd of commands) {
-    const payload = JSON.parse(cmd); // JSON.parseで文字列に変換
-    await characteristic.writeValue(encoder.encode(payload));
-    await new Promise(r => setTimeout(r, 800));
-  }
-  alert("✨ うごかしたよ！");
-};
-</script>
+    // 送信ボタン押下
+    document.getElementById("send").addEventListener("click", async () => {
+      if (!characteristic) {
+        alert("先にESP32へ接続してください");
+        return;
+      }
+
+      const text = document.getElementById("textInput").value;
+      if (!text) {
+        alert("文字を入力してください");
+        return;
+      }
+
+      try {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(text);
+        await characteristic.writeValue(data);
+        alert(`📡 送信完了: ${text}`);
+      } catch (error) {
+        console.error(error);
+        alert("送信エラー: " + error);
+      }
+    });
+  </script>
 </body>
 </html>
