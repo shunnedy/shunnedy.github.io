@@ -112,10 +112,15 @@ document.getElementById('run').onclick = async () => {
     return;
   }
   const code = Blockly.JavaScript.workspaceToCode(workspace);
-  const commands = code.split('\n').filter(c => c.length > 0);
+  const commands = code.match(/"[^"]*"/g); // 正規表現で文字列を抽出
+  if (!commands) {
+    alert("ブロックを配置してね！");
+    return;
+  }
   const encoder = new TextEncoder();
   for (const cmd of commands) {
-    await characteristic.writeValue(encoder.encode(eval(cmd)));
+    const payload = JSON.parse(cmd); // JSON.parseで文字列に変換
+    await characteristic.writeValue(encoder.encode(payload));
     await new Promise(r => setTimeout(r, 800));
   }
   alert("✨ うごかしたよ！");
